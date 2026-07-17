@@ -1,0 +1,38 @@
+name: Daily Itihas AI Fact Images
+
+on:
+  schedule:
+    # 00:30 UTC = 6:00 AM IST, roz
+    - cron: '30 0 * * *'
+  workflow_dispatch: {}  # Manually bhi "Run workflow" button se chala sakte ho
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests Pillow
+
+      - name: Generate daily images
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: python generate_daily_images.py
+
+      - name: Commit and push generated files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add generated_images/ used_facts.json fonts/
+          git diff --quiet && git diff --staged --quiet || git commit -m "Daily facts: $(date +'%Y-%m-%d')"
+          git push
