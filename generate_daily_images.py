@@ -40,7 +40,7 @@ GROQ_MODEL = "llama-3.3-70b-versatile"
 def download_google_font(family, weight, out_path):
     if os.path.exists(out_path):
         return out_path
-    css_url = f"https://fonts.googleapis.com/css2?family={quote(family)}:wght@{weight}"
+    css_url = f"https://fonts.googleapis.com/css2?family={quote(family, safe='+')}:wght@{weight}"
     resp = requests.get(css_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
     resp.raise_for_status()
     match = re.search(r"url\((https://fonts\.gstatic\.com/[^)]+)\)", resp.text)
