@@ -20,6 +20,9 @@ import time
 import requests
 from urllib.parse import quote
 from PIL import Image, ImageDraw, ImageFont
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 
 # ---------------- CONFIG ----------------
 IMG_WIDTH, IMG_HEIGHT = 1080, 1350
@@ -40,7 +43,7 @@ GROQ_MODEL = "llama-3.3-70b-versatile"
 def download_google_font(family, weight, out_path):
     if os.path.exists(out_path):
         return out_path
-    css_url = f"https://fonts.googleapis.com/css2?family={quote(family, safe='+')}:wght@{weight}"
+    css_url = f"https://fonts.googleapis.com/css2?family={quote(family)}:wght@{weight}"
     resp = requests.get(css_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
     resp.raise_for_status()
     match = re.search(r"url\((https://fonts\.gstatic\.com/[^)]+)\)", resp.text)
@@ -210,6 +213,48 @@ def compose_image(bg_img, fact_hindi, highlight_gold, highlight_red, hindi_font_
     img.convert("RGB").save(out_path, "JPEG", quality=92)
 
 
+# ---------------- Google Drive upload (new project only) ----------------
+def get_drive_service():
+    creds = Credentials(
+        None,
+        refresh_token=os.environ["OAUTH_REFRESH_TOKEN"],
+        client_id=os.environ["OAUTH_CLIENT_ID"],
+        client_secret=os.environ["OAUTH_CLIENT_SECRET"],
+        token_uri="https://oauth2.googleapis.com/token",
+    )
+    return build("drive", "v3", credentials=creds)
+
+
+def get_or_create_date_folder(service, parent_id, date_str):
+    """Aaj ki date ka folder dhundta hai; agar nahi milta tabhi naya banata hai.
+    Isse ek din mein sirf EK hi folder banega, chahe workflow kitni baar chale."""
+    query = (
+        f"'{parent_id}' in parents and name='{date_str}' "
+        f"and mimeType='application/vnd.google-apps.folder' and trashed=false"
+    )
+    results = service.files().list(q=query, fields="files(id, name)").execute()
+    existing = results.get("files", [])
+    if existing:
+        print(f"Existing Drive folder mil gaya: {date_str}")
+        return existing[0]["id"]
+
+    print(f"Naya Drive folder banaya jaa raha hai: {date_str}")
+    folder_metadata = {
+        "name": date_str,
+        "mimeType": "application/vnd.google-apps.folder",
+        "parents": [parent_id],
+    }
+    folder = service.files().create(body=folder_metadata, fields="id").execute()
+    return folder["id"]
+
+
+def upload_file_to_drive(service, folder_id, file_path, mime_type):
+    file_metadata = {"name": os.path.basename(file_path), "parents": [folder_id]}
+    media = MediaFileUpload(file_path, mimetype=mime_type)
+    service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+    print(f"Upload ho gaya: {os.path.basename(file_path)}")
+
+
 # ---------------- Main ----------------
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -248,6 +293,18 @@ def main():
         f.write("\n".join(captions_out))
 
     print("Sab images aur captions ban gaye!")
+
+    print("Google Drive par upload ho raha hai...")
+    service = get_drive_service()
+    parent_id = os.environ["DRIVE_PARENT_FOLDER_ID"]
+    folder_id = get_or_create_date_folder(service, parent_id, date_tag)
+
+    for i in range(1, len(facts) + 1):
+        img_path = os.path.join(OUTPUT_DIR, f"{date_tag}_fact{i}.jpg")
+        upload_file_to_drive(service, folder_id, img_path, "image/jpeg")
+
+    upload_file_to_drive(service, folder_id, captions_path, "text/plain")
+    print("Drive upload complete!")
 
 
 if __name__ == "__main__":
