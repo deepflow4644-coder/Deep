@@ -13,7 +13,7 @@ import os
 from google import genai
 from .fact_tracker import load_used_facts
 
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = "gemini-3.1-flash-lite-image"
 
 PROMPT_TEMPLATE = """
 Tum ek Indian history expert ho. Ek naya, interesting, kam-suna-hua
