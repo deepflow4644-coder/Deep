@@ -17,7 +17,7 @@ Other SETTINGS:
 import os
 from google import genai
 
-MODEL_NAME = "nano-banana-2-lite"  # <-- verify exact name in Google AI Studio
+MODEL_NAME = "gemini-3.1-flash-lite-image"  # <-- verify exact name in Google AI Studio
 
 IMAGE_PROMPT_TEMPLATE = """
 Create a cinematic, historically-themed background illustration
