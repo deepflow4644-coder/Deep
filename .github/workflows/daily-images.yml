@@ -1,0 +1,53 @@
+name: Daily Itihas Images
+
+# SETTING: cron times are in UTC. IST = UTC + 5:30
+# 4:00 AM IST  -> 22:30 UTC (previous day)
+# 5:00 AM IST  -> 23:30 UTC (previous day)
+on:
+  schedule:
+    - cron: "30 22 * * *"   # runs at 4:00 AM IST
+    - cron: "30 23 * * *"   # runs at 5:00 AM IST
+  workflow_dispatch: {}      # allows manual run from GitHub UI for testing
+
+permissions:
+  contents: write            # needed so the workflow can commit used_facts.json
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Determine batch label
+        id: batch
+        run: |
+          HOUR_UTC=$(date -u +%H)
+          if [ "$HOUR_UTC" = "22" ]; then
+            echo "label=batch1_4am" >> "$GITHUB_OUTPUT"
+          else
+            echo "label=batch2_5am" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run image generation
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
+        run: python main.py ${{ steps.batch.outputs.label }}
+
+      - name: Commit updated used_facts.json
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add used_facts.json
+          git diff --quiet --cached || git commit -m "Update used_facts.json [automated]"
+          git push
